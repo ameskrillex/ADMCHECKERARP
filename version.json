@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "url": "https://raw.githubusercontent.com/ameskrillex/ADMCHECKERARP/main/ADM.lua",
-  "changelog": "Первая публичная версия"
+  "changelog": "Тест автообновления: добавлен вывод версии в статус и стартовое сообщение"
 }
