@@ -1,6 +1,6 @@
 script_name("ADV-RP.RU ADM CHECKER")
 script_author("Casual Alvarez")
-script_version("1.0.1")
+script_version("1.0.2")
 script_description("ADV-RP.RU ADM CHECKER by Casual Alvarez")
 script_moonloader(26)
 script_dependencies("SAMPFUNCS", "SAMP")
@@ -371,7 +371,7 @@ function replace_current_script_from_file(downloaded_path)
     return write_file_text(script_path, downloaded_content)
 end
 
-function check_script_update(show_no_update_message, show_error_message)
+function check_script_update(show_no_update_message, show_error_message, apply_update_now)
     if update_check_in_progress then
         if show_error_message then
             message("Проверка обновления уже выполняется.")
@@ -419,6 +419,15 @@ function check_script_update(show_no_update_message, show_error_message)
                 else
                     message("Автообновление: используется актуальная версия.")
                 end
+            end
+            return
+        end
+
+        if apply_update_now ~= true then
+            update_check_in_progress = false
+            message(string.format("Доступно обновление ADM Checker: %s -> %s. Введите /ac update или /acupdate.", tostring(APP_VERSION), tostring(info.version)))
+            if info.changelog ~= nil and info.changelog ~= "" then
+                message("Изменения: " .. tostring(info.changelog))
             end
             return
         end
@@ -483,7 +492,7 @@ function check_script_update(show_no_update_message, show_error_message)
 end
 
 function checker_update_command()
-    check_script_update(true, true)
+    check_script_update(true, true, true)
 end
 
 local function normalize_admin_level(level)
@@ -5458,7 +5467,7 @@ function main()
     message(STARTUP_SEPARATOR)
     lua_thread.create(function()
         wait(1500)
-        check_script_update(true, false)
+        check_script_update(true, false, false)
     end)
 
     while true do
