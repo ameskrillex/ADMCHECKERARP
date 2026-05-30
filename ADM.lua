@@ -1,6 +1,6 @@
 script_name("ADV-RP.RU ADM CHECKER")
 script_author("Casual Alvarez")
-script_version("1.0.0")
+script_version("1.0.1")
 script_description("ADV-RP.RU ADM CHECKER by Casual Alvarez")
 script_moonloader(26)
 script_dependencies("SAMPFUNCS", "SAMP")
@@ -139,7 +139,7 @@ local FONT_OPTIONS = {
 
 local APP_TITLE = "Advance-RP AdminChecker by Casual Alvarez"
 local APP_AUTHOR = "Casual Alvarez"
-local APP_VERSION = "1.0.0"
+local APP_VERSION = "1.0.1"
 UPDATE_INFO_URL = "https://raw.githubusercontent.com/ameskrillex/ADMCHECKERARP/main/version.json"
 UPDATE_TEMP_INFO_PATH = CHECKER_DIR .. "\\version_remote.json"
 UPDATE_TEMP_SCRIPT_PATH = CHECKER_DIR .. "\\ADM_update.lua"
@@ -337,6 +337,26 @@ function parse_update_info(content)
     }
 end
 
+function parse_script_version_from_content(content)
+    content = tostring(content or "")
+    content = content:gsub("^\239\187\191", "")
+
+    local script_ver = string.match(content, 'script_version%("([^"]+)"%)')
+    if script_ver == nil then
+        script_ver = string.match(content, "script_version%('([^']+)'%)")
+    end
+
+    if script_ver == nil then
+        script_ver = string.match(content, 'APP_VERSION%s*=%s*"([^"]+)"')
+    end
+
+    if script_ver == nil then
+        script_ver = string.match(content, "APP_VERSION%s*=%s*'([^']+)'")
+    end
+
+    return script_ver
+end
+
 function replace_current_script_from_file(downloaded_path)
     local downloaded_content = read_file_text(downloaded_path)
     if downloaded_content == nil or downloaded_content == "" then
@@ -413,6 +433,29 @@ function check_script_update(show_no_update_message, show_error_message)
                     end
 
                     update_check_in_progress = false
+
+                    local downloaded_content = read_file_text(UPDATE_TEMP_SCRIPT_PATH)
+                    local downloaded_version = parse_script_version_from_content(downloaded_content)
+                    if downloaded_version == nil then
+                        if show_error_message then
+                            message("Не удалось определить версию в скачанном ADM.lua.")
+                        end
+                        return
+                    end
+
+                    if downloaded_version ~= tostring(info.version) then
+                        if show_error_message then
+                            message(string.format("Источник обновления рассинхронизирован: version.json=%s, ADM.lua=%s.", tostring(info.version), tostring(downloaded_version)))
+                        end
+                        return
+                    end
+
+                    if not is_remote_version_newer(APP_VERSION, downloaded_version) then
+                        if show_error_message then
+                            message("Скачанный ADM.lua не новее текущей версии. Проверьте, что на GitHub обновлён сам скрипт.")
+                        end
+                        return
+                    end
 
                     if not replace_current_script_from_file(UPDATE_TEMP_SCRIPT_PATH) then
                         if show_error_message then
