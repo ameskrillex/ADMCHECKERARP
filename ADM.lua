@@ -1,6 +1,6 @@
 script_name("ADV-RP.RU ADM CHECKER")
 script_author("Casual Alvarez")
-script_version("1.0.0")
+script_version("1.0.1")
 script_description("ADV-RP.RU ADM CHECKER by Casual Alvarez")
 script_moonloader(26)
 script_dependencies("SAMPFUNCS", "SAMP")
@@ -139,7 +139,7 @@ local FONT_OPTIONS = {
 
 local APP_TITLE = "Advance-RP AdminChecker by Casual Alvarez"
 local APP_AUTHOR = "Casual Alvarez"
-local APP_VERSION = "1.0.0"
+local APP_VERSION = "1.0.1"
 UPDATE_INFO_URL = "https://raw.githubusercontent.com/ameskrillex/ADMCHECKERARP/main/version.json"
 UPDATE_TEMP_INFO_PATH = CHECKER_DIR .. "\\version_remote.json"
 UPDATE_TEMP_SCRIPT_PATH = CHECKER_DIR .. "\\ADM_update.lua"
@@ -3140,6 +3140,7 @@ checker_help = function()
 end
 
 checker_status = function()
+    message("Версия скрипта: " .. APP_VERSION)
     message(string.format(
         "Лидеры=%s, друзья=%s, админы=%s, автообновление=%s",
         tostring(config.checker.leaders_checker_status),
@@ -5393,7 +5394,7 @@ function main()
     sampRegisterChatCommand("acupdate", checker_update_command)
     sync_online_ids()
     message(STARTUP_SEPARATOR)
-    message("ADV-RP.RU ADM CHECKER by Casual Alvarez")
+    message("ADV-RP.RU ADM CHECKER by Casual Alvarez v" .. APP_VERSION)
     if imgui_loaded then
         message("Команды: /ac | /acmenu | /achelp | /acupdate")
     else
