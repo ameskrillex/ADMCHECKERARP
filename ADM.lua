@@ -9,6 +9,7 @@ require("lib.sampfuncs")
 require("lib.moonloader")
 
 local inicfg = require("inicfg")
+local dlstatus = require("moonloader").download_status
 local encoding = require("encoding")
 local sampev = require("lib.samp.events")
 local bit = require("bit")
@@ -139,6 +140,9 @@ local FONT_OPTIONS = {
 local APP_TITLE = "Advance-RP AdminChecker by Casual Alvarez"
 local APP_AUTHOR = "Casual Alvarez"
 local APP_VERSION = "1.0.0"
+UPDATE_INFO_URL = "https://raw.githubusercontent.com/ameskrillex/ADMCHECKERARP/main/version.json"
+UPDATE_TEMP_INFO_PATH = CHECKER_DIR .. "\\version_remote.json"
+UPDATE_TEMP_SCRIPT_PATH = CHECKER_DIR .. "\\ADM_update.lua"
 
 local config = nil
 local font = nil
@@ -179,6 +183,7 @@ local save_config = nil
 local remove_admin = nil
 local sync_online_ids = nil
 local ensure_default_admins = nil
+update_check_in_progress = false
 
 local function message(text)
     if text ~= nil and string.find(tostring(text), "Standalone%-") then
@@ -247,6 +252,182 @@ end
 
 local function clean_list_field(value)
     return tostring(value or ""):gsub("|", "/")
+end
+
+function read_file_text(path)
+    local file = io.open(path, "rb")
+    if file == nil then
+        return nil
+    end
+
+    local content = file:read("*a")
+    file:close()
+    return content
+end
+
+function write_file_text(path, content)
+    local file = io.open(path, "wb")
+    if file == nil then
+        return false
+    end
+
+    file:write(content or "")
+    file:close()
+    return true
+end
+
+function parse_version_components(version)
+    local result = {}
+    for value in tostring(version or "0"):gmatch("(%d+)") do
+        table.insert(result, tonumber(value) or 0)
+    end
+    return result
+end
+
+function is_remote_version_newer(local_version, remote_version)
+    local local_parts = parse_version_components(local_version)
+    local remote_parts = parse_version_components(remote_version)
+    local length = math.max(#local_parts, #remote_parts)
+
+    for index = 1, length do
+        local left = local_parts[index] or 0
+        local right = remote_parts[index] or 0
+        if right > left then
+            return true
+        elseif right < left then
+            return false
+        end
+    end
+
+    return false
+end
+
+function parse_update_info(content)
+    content = tostring(content or "")
+    content = content:gsub("^\239\187\191", "")
+    content = content:gsub("^%s+", "")
+
+    local remote_version = string.match(content, '"version"%s*:%s*"([^"]+)"')
+    local remote_url = string.match(content, '"url"%s*:%s*"([^"]+)"')
+    local changelog = string.match(content, '"changelog"%s*:%s*"([^"]*)"')
+
+    if remote_version == nil then
+        remote_version = string.match(content, "'version'%s*:%s*'([^']+)'")
+    end
+
+    if remote_url == nil then
+        remote_url = string.match(content, "'url'%s*:%s*'([^']+)'")
+    end
+
+    if changelog == nil then
+        changelog = string.match(content, "'changelog'%s*:%s*'([^']*)'")
+    end
+
+    if remote_version == nil or remote_url == nil then
+        return nil
+    end
+
+    remote_url = remote_url:gsub("\\/", "/")
+    changelog = (changelog or ""):gsub("\\n", "\n"):gsub("\\/", "/")
+
+    return {
+        version = remote_version,
+        url = remote_url,
+        changelog = changelog
+    }
+end
+
+function replace_current_script_from_file(downloaded_path)
+    local downloaded_content = read_file_text(downloaded_path)
+    if downloaded_content == nil or downloaded_content == "" then
+        return false
+    end
+
+    local script_path = thisScript() ~= nil and thisScript().path or nil
+    if script_path == nil or script_path == "" then
+        return false
+    end
+
+    return write_file_text(script_path, downloaded_content)
+end
+
+function check_script_update(show_no_update_message, show_error_message)
+    if update_check_in_progress then
+        if show_error_message then
+            message("Проверка обновления уже выполняется.")
+        end
+        return
+    end
+
+    if downloadUrlToFile == nil then
+        if show_error_message then
+            message("Функция загрузки недоступна, автообновление не поддерживается.")
+        end
+        return
+    end
+
+    update_check_in_progress = true
+    pcall(os.remove, UPDATE_TEMP_INFO_PATH)
+    pcall(os.remove, UPDATE_TEMP_SCRIPT_PATH)
+
+    downloadUrlToFile(UPDATE_INFO_URL, UPDATE_TEMP_INFO_PATH, function(_, status)
+        if status ~= dlstatus.STATUS_ENDDOWNLOADDATA then
+            return
+        end
+
+        local info_content = read_file_text(UPDATE_TEMP_INFO_PATH)
+        local info = parse_update_info(info_content)
+        if info == nil then
+            update_check_in_progress = false
+            if show_error_message then
+                local preview = tostring(info_content or ""):gsub("[%c]", " ")
+                preview = preview:sub(1, 80)
+                if string.find(string.lower(preview), "not found", 1, true) or string.find(string.lower(preview), "<!doctype", 1, true) or string.find(string.lower(preview), "<html", 1, true) then
+                    message("Источник обновления вернул не JSON, а другую страницу.")
+                else
+                    message("Не удалось прочитать version.json обновления.")
+                end
+            end
+            return
+        end
+
+        if not is_remote_version_newer(APP_VERSION, info.version) then
+            update_check_in_progress = false
+            if show_no_update_message then
+                if show_error_message then
+                    message("У вас уже установлена последняя версия.")
+                else
+                    message("Автообновление: используется актуальная версия.")
+                end
+            end
+            return
+        end
+
+        downloadUrlToFile(info.url, UPDATE_TEMP_SCRIPT_PATH, function(_, download_status)
+            if download_status ~= dlstatus.STATUS_ENDDOWNLOADDATA then
+                return
+            end
+
+            update_check_in_progress = false
+
+            if not replace_current_script_from_file(UPDATE_TEMP_SCRIPT_PATH) then
+                if show_error_message then
+                    message("Не удалось заменить текущий файл скрипта.")
+                end
+                return
+            end
+
+            message(string.format("Скачано обновление ADM Checker до версии %s.", tostring(info.version)))
+            if info.changelog ~= nil and info.changelog ~= "" then
+                message("Изменения: " .. tostring(info.changelog))
+            end
+            message("Перезагрузите скрипт или игру, чтобы применить обновление.")
+        end)
+    end)
+end
+
+function checker_update_command()
+    check_script_update(true, true)
 end
 
 local function normalize_admin_level(level)
@@ -2493,6 +2674,11 @@ local function checker_command(params)
         return
     end
 
+    if group == "update" then
+        checker_update_command()
+        return
+    end
+
     if group == "set" then
         local key = string.lower(args[2] or "")
         local value = args[3]
@@ -4578,7 +4764,7 @@ end
 
 checker_help = function()
     message("Использование: /ac [admin/leader/friend] [add/remove] [id/ник] [lvl/org]")
-    message("Служебное: /ac reload, /ac status")
+    message("Служебное: /ac reload, /ac status, /ac update")
     message("Настройки: /ac set [leaders/friends/admins/sources/autoupdate] [on/off]")
     message("Оверлей: /ac set [x/y/font/fontsize] [значение]")
     message("GUI: /acmenu")
@@ -5204,15 +5390,20 @@ function main()
     sampRegisterChatCommand("ac", checker_command)
     sampRegisterChatCommand("acmenu", toggle_checker_window)
     sampRegisterChatCommand("achelp", toggle_help_window)
+    sampRegisterChatCommand("acupdate", checker_update_command)
     sync_online_ids()
     message(STARTUP_SEPARATOR)
     message("ADV-RP.RU ADM CHECKER by Casual Alvarez")
     if imgui_loaded then
-        message("Команды: /ac | /acmenu | /achelp")
+        message("Команды: /ac | /acmenu | /achelp | /acupdate")
     else
-        message("ImGui не найден. GUI, /acmenu и /achelp отключены.")
+        message("ImGui не найден. GUI, /acmenu и /achelp отключены. Обновление: /acupdate")
     end
     message(STARTUP_SEPARATOR)
+    lua_thread.create(function()
+        wait(1500)
+        check_script_update(true, false)
+    end)
 
     while true do
         wait(0)
