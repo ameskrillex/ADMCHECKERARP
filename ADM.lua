@@ -1,6 +1,6 @@
 script_name("ADV-RP.RU ADM CHECKER")
 script_author("Casual Alvarez")
-script_version("1.0.1")
+script_version("1.0.0")
 script_description("ADV-RP.RU ADM CHECKER by Casual Alvarez")
 script_moonloader(26)
 script_dependencies("SAMPFUNCS", "SAMP")
@@ -139,7 +139,7 @@ local FONT_OPTIONS = {
 
 local APP_TITLE = "Advance-RP AdminChecker by Casual Alvarez"
 local APP_AUTHOR = "Casual Alvarez"
-local APP_VERSION = "1.0.1"
+local APP_VERSION = "1.0.0"
 UPDATE_INFO_URL = "https://raw.githubusercontent.com/ameskrillex/ADMCHECKERARP/main/version.json"
 UPDATE_TEMP_INFO_PATH = CHECKER_DIR .. "\\version_remote.json"
 UPDATE_TEMP_SCRIPT_PATH = CHECKER_DIR .. "\\ADM_update.lua"
@@ -403,25 +403,38 @@ function check_script_update(show_no_update_message, show_error_message)
             return
         end
 
-        downloadUrlToFile(info.url, UPDATE_TEMP_SCRIPT_PATH, function(_, download_status)
-            if download_status ~= dlstatus.STATUS_ENDDOWNLOADDATA then
-                return
-            end
+        lua_thread.create(function()
+            wait(150)
 
-            update_check_in_progress = false
+            local ok_download, download_error = pcall(function()
+                downloadUrlToFile(info.url, UPDATE_TEMP_SCRIPT_PATH, function(_, download_status)
+                    if download_status ~= dlstatus.STATUS_ENDDOWNLOADDATA then
+                        return
+                    end
 
-            if not replace_current_script_from_file(UPDATE_TEMP_SCRIPT_PATH) then
+                    update_check_in_progress = false
+
+                    if not replace_current_script_from_file(UPDATE_TEMP_SCRIPT_PATH) then
+                        if show_error_message then
+                            message("Не удалось заменить текущий файл скрипта.")
+                        end
+                        return
+                    end
+
+                    message(string.format("Скачано обновление ADM Checker до версии %s.", tostring(info.version)))
+                    if info.changelog ~= nil and info.changelog ~= "" then
+                        message("Изменения: " .. tostring(info.changelog))
+                    end
+                    message("Перезагрузите скрипт или игру, чтобы применить обновление.")
+                end)
+            end)
+
+            if not ok_download then
+                update_check_in_progress = false
                 if show_error_message then
-                    message("Не удалось заменить текущий файл скрипта.")
+                    message("Не удалось запустить скачивание обновления: " .. tostring(download_error))
                 end
-                return
             end
-
-            message(string.format("Скачано обновление ADM Checker до версии %s.", tostring(info.version)))
-            if info.changelog ~= nil and info.changelog ~= "" then
-                message("Изменения: " .. tostring(info.changelog))
-            end
-            message("Перезагрузите скрипт или игру, чтобы применить обновление.")
         end)
     end)
 end
@@ -3140,7 +3153,6 @@ checker_help = function()
 end
 
 checker_status = function()
-    message("Версия скрипта: " .. APP_VERSION)
     message(string.format(
         "Лидеры=%s, друзья=%s, админы=%s, автообновление=%s",
         tostring(config.checker.leaders_checker_status),
@@ -5394,7 +5406,7 @@ function main()
     sampRegisterChatCommand("acupdate", checker_update_command)
     sync_online_ids()
     message(STARTUP_SEPARATOR)
-    message("ADV-RP.RU ADM CHECKER by Casual Alvarez v" .. APP_VERSION)
+    message("ADV-RP.RU ADM CHECKER by Casual Alvarez")
     if imgui_loaded then
         message("Команды: /ac | /acmenu | /achelp | /acupdate")
     else
